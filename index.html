@@ -300,6 +300,17 @@ input[type=range] {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 <script type="module">
+    
+    const manifest = {
+        "name": "Murder", "short_name": "Murder", "start_url": window.location.href,
+        "display": "standalone", "background_color": "#000000", "theme_color": "#0088cc",
+        "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/8449/8449135.png", "sizes": "192x192", "type": "image/png"}]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+
+    
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
     import { getDatabase, ref, set, onValue, push, remove, update, onDisconnect } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
