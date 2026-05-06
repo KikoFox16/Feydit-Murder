@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Murder Real-Life</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+    --primary: #bb86fc;
+    --primary-dark: #9a67ea;
+    --background: #121212;
+    --surface: #1e1e1e;
+    --error: #cf6679;
+    --on-primary: #000000;
+    --on-surface: #ffffff;
+    --on-background: #e0e0e0;
+    --murder: #ff4444;
+    --civil: #00c853;
+    --safe-bottom: env(safe-area-inset-bottom); /* Pour les iPhones récents */
+}
+
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+    font-family: 'Inter', 'Segoe UI', Roboto, sans-serif; 
+    -webkit-tap-highlight-color: transparent; /* Supprime le flash bleu au clic sur mobile */
+}
+
+body { 
+    background-color: var(--background); 
+    color: var(--on-background); 
+    height: 100vh; 
+    height: -webkit-fill-available; /* Correction bug hauteur iOS */
+    overflow: hidden; 
+    position: fixed; /* Empêche le rebond du scroll */
+    width: 100%;
+}
+
+#app { 
+    height: 100%; 
+    width: 100%; 
+    position: relative; 
+}
+
+/* --- Écrans --- */
+.screen { 
+    position: absolute; 
+    inset: 0;
+    z-index: 10; 
+    background: var(--background); 
+    display: flex; 
+    flex-direction: column; 
+    padding: 24px 16px;
+    padding-bottom: calc(24px + var(--safe-bottom));
+}
+
+.hidden { display: none !important; }
+
+/* --- Cartes --- */
+#setupMap, #gameMap { 
+    width: 100%; 
+    flex-grow: 1; 
+    border-radius: 20px; 
+    margin: 12px 0; 
+    z-index: 1;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* --- Boutons Mobiles --- */
+.btn { 
+    background: var(--primary); 
+    color: var(--on-primary); 
+    border: none; 
+    min-height: 56px; /* Taille standard pour les pouces */
+    border-radius: 12px; 
+    font-size: 1rem;
+    font-weight: 800; 
+    cursor: pointer; 
+    text-transform: uppercase; 
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s active;
+}
+
+.btn:active {
+    transform: scale(0.97); /* Feedback tactile */
+    filter: brightness(0.9);
+}
+
+.btn-secondary { 
+    background: var(--surface); 
+    color: var(--primary); 
+    border: 2px solid var(--primary); 
+}
+
+.btn-danger { background: var(--error); color: white; }
+
+.form-input { 
+    background: var(--surface); 
+    border: 2px solid #333; 
+    padding: 16px; 
+    border-radius: 12px; 
+    color: white; 
+    margin-bottom: 16px; 
+    font-size: 16px; /* Empêche le zoom auto de l'iPhone au focus */
+}
+
+/* --- HUD (Interface de jeu) --- */
+.hud { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    padding: 12px;
+    z-index: 100; 
+    pointer-events: none; 
+}
+
+.hud-card { 
+    background: rgba(30, 30, 30, 0.9); 
+    backdrop-filter: blur(10px);
+    padding: 15px; 
+    border-radius: 16px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border: 1px solid rgba(187, 134, 252, 0.3);
+    pointer-events: auto;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+
+#hud-role {
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+}
+
+/* --- Liste Joueurs Lobby --- */
+#players-list { 
+    margin: 16px 0; 
+    flex-grow: 1; 
+    overflow-y: auto;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    padding: 8px;
+}
+
+.player-item { 
+    background: var(--surface); 
+    padding: 14px; 
+    margin-bottom: 8px; 
+    border-radius: 10px; 
+    display: flex; 
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* --- Modals --- */
+.modal-overlay { 
+    position: fixed; 
+    inset: 0; 
+    background: rgba(0,0,0,0.85); 
+    z-index: 1500; 
+    display: flex; 
+    align-items: flex-end; /* Apparait en bas pour le pouce */
+    justify-content: center; 
+}
+
+.modal { 
+    background: var(--surface); 
+    width: 100%; 
+    max-width: 500px; 
+    padding: 30px 20px; 
+    border-radius: 24px 24px 0 0; /* Arrondi seulement en haut */
+    animation: slideUp 0.3s ease-out;
+}
+
+/* --- Toasts --- */
+#toastContainer { 
+    position: fixed; 
+    top: 80px; /* En haut pour ne pas gêner les boutons du bas */
+    left: 50%; 
+    transform: translateX(-50%); 
+    z-index: 2000; 
+    width: 90%; 
+}
+
+.toast { 
+    background: var(--primary); 
+    color: black;
+    padding: 16px; 
+    border-radius: 12px; 
+    margin-bottom: 10px; 
+    font-weight: bold;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+/* --- Écran de Mort / Ghost --- */
+.ghost-mode { 
+    filter: grayscale(100%) contrast(1.2); 
+}
+
+.eliminate-btn { 
+    position: fixed; 
+    bottom: 40px; 
+    left: 16px;
+    right: 16px;
+    z-index: 100; 
+    background: var(--murder); 
+    padding: 20px; 
+    border-radius: 16px; 
+    font-size: 1.4rem; 
+    font-weight: 900;
+    box-shadow: 0 0 20px rgba(255, 68, 68, 0.4);
+    display: none; 
+}
+
+/* Animations */
+@keyframes slideUp { 
+    from { transform: translateY(100%); } 
+    to { transform: translateY(0); } 
+}
+
+/* Range Input Mobile */
+input[type=range] {
+    width: 100%;
+    margin: 15px 0;
+    height: 8px;
+    background: #333;
+    border-radius: 5px;
+    accent-color: var(--primary);
+}
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="screen-menu" class="screen">
+        <h1 style="text-align:center; color:var(--primary); margin: 40px 0;">MURDER REAL-LIFE</h1>
+        <button class="btn" onclick="openJoinModal()">Rejoindre un Lobby</button>
+        <button class="btn btn-secondary" onclick="openCreateModal()">Créer un Lobby</button>
+    </div>
+
+    <div id="screen-lobby" class="screen hidden">
+    <h2 id="lobby-code-display" style="text-align:center;">Lobby: ----</h2>
+    <div id="players-list"></div>
+    
+    <div id="host-settings" class="hidden" style="background: var(--surface); padding: 15px; border-radius: 12px; margin-bottom: 10px;">
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div style="flex: 1;">
+                <label style="font-size: 0.7rem; color: var(--primary);">MURDERS</label>
+                <input type="number" id="input-murder" class="form-input" value="1" min="1" style="width: 100%; margin: 5px 0 0 0;" onchange="validateAndSyncSettings()">
+            </div>
+            <div style="flex: 1;">
+                <label style="font-size: 0.7rem; color: var(--primary);">MINUTES</label>
+                <input type="number" id="input-duration" class="form-input" value="10" min="2" style="width: 100%; margin: 5px 0 0 0;" onchange="validateAndSyncSettings()">
+            </div>
+        </div>
+        <button class="btn btn-secondary" style="width: 100%; font-size: 0.8rem;" onclick="openZoneEditor()">
+            📍 DÉFINIR LA ZONE DE JEU
+        </button>
+    </div>
+
+    <button id="btn-ready" class="btn" onclick="toggleReady()">Prêt</button>
+    <button class="btn btn-danger" onclick="leaveLobby()">Quitter</button>
+</div>
+
+
+    <div id="screen-game" class="screen hidden" style="padding:0;">
+        <div class="hud">
+            <div class="hud-card">
+                <div>⌛ <span id="timer">00:00</span></div>
+                <div id="hud-role" style="font-weight:bold;">CIVIL</div>
+                <div>👥 <span id="alive-count">0</span></div>
+            </div>
+            <div id="bonus-status" class="hidden" style="margin-top:5px; font-size:0.7rem; color:var(--primary); text-align:center; background:rgba(0,0,0,0.6); border-radius:5px;"></div>
+        </div>
+        
+        <div id="gameMap"></div>
+        <button id="btn-eliminate" class="btn btn-danger eliminate-btn" onclick="doEliminate()">ÉLIMINER !</button>
+    </div>
+
+    <div id="screen-results" class="screen hidden">
+        <h1 id="winner-text" style="text-align:center; margin-top:50px;">VICTOIRE</h1>
+        <div id="ranking-list" style="margin: 30px 0; flex-grow:1;"></div>
+        <button class="btn" onclick="location.reload()">Retour Menu</button>
+    </div>
+</div>
+
+<div id="modal-container" class="modal-overlay hidden">
+    <div class="modal" id="modal-content"></div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue, push, remove, update, onDisconnect } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDOjNh8WlF4BXyV-gR6x-xOKuuP04W7SgM",
+        authDomain: "murder-baf31.firebaseapp.com",
+        projectId: "murder-baf31",
+        databaseURL: "https://murder-baf31-default-rtdb.europe-west1.firebasedatabase.app",
+        storageBucket: "murder-baf31.firebasestorage.app",
+        messagingSenderId: "721786047085",
+        appId: "1:721786047085:web:c1e2389b5774d7e9bc8d64"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // --- State ---
+    let state = {
+        user: localStorage.getItem('m_user') || '',
+        lobbyId: null,
+        playerKey: null,
+        isHost: false,
+        players: {},
+        settings: { murderCount: 1, duration: 10, zone: null },
+        role: 'civil',
+        status: 'lobby',
+        pos: null,
+        bonuses: { kill: false, seeMurders: false, seeAll: false },
+        bonusZones: [],
+        nearbyPlayer: null,
+        outOfZoneTimer: null,
+        isOutOfZone: false
+    };
+
+    const bannedWords = ['fuck', 'merde', 'pute', 'salope', 'connard', 'nique'];
+    let setupMap, gameMap, zoneLayer, playerMarker, bonusMarkers = [], otherMarkers = [];
+
+    // --- Init ---
+    window.onload = () => {
+        if (!state.user) openUserModal();
+        initSetupMap();
+    };
+
+window.openZoneEditor = () => {
+    // On crée une interface plein écran temporaire
+    const editorHtml = `
+        <div id="zone-editor-ui" style="position:fixed; inset:0; z-index:9999; background:var(--background); display:flex; flex-direction:column; padding:10px;">
+            <h3 style="text-align:center; padding:10px;">Tapez la carte pour tracer la zone</h3>
+            <div id="bigSetupMap" style="flex-grow:1; border-radius:15px;"></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding-top:10px;">
+                <button class="btn btn-secondary" onclick="confirmZone()">VALIDER</button>
+                <button class="btn btn-danger" onclick="clearZoneInEditor()">EFFACER</button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', editorHtml);
+
+    // Initialisation de la grande carte
+    const bigMap = L.map('bigSetupMap').setView(state.pos ? [state.pos.lat, state.pos.lng] : [48.8566, 2.3522], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(bigMap);
+
+    let tempPoints = state.settings.zone ? [...state.settings.zone] : [];
+    let tempLayer = null;
+
+    if (tempPoints.length > 0) {
+        tempLayer = L.polygon(tempPoints, {color: '#bb86fc'}).addTo(bigMap);
+    }
+
+    bigMap.on('click', (e) => {
+        tempPoints.push([e.latlng.lat, e.latlng.lng]);
+        if (tempLayer) bigMap.removeLayer(tempLayer);
+        tempLayer = L.polygon(tempPoints, {color: '#bb86fc'}).addTo(bigMap);
+    });
+
+    // Fonctions internes à l'éditeur
+    window.confirmZone = () => {
+        state.settings.zone = tempPoints;
+        updateSettings('zone', tempPoints);
+        document.getElementById('zone-editor-ui').remove();
+        toast("Zone enregistrée !");
+    };
+
+    window.clearZoneInEditor = () => {
+        tempPoints = [];
+        if (tempLayer) bigMap.removeLayer(tempLayer);
+    };
+
+    // Centrer sur l'utilisateur si possible
+    navigator.geolocation.getCurrentPosition(p => {
+        bigMap.setView([p.coords.latitude, p.coords.longitude], 16);
+    });
+};
+
+
+    // --- Maps Logic ---
+    function initSetupMap() {
+        setupMap = L.map('setupMap').setView([48.8566, 2.3522], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(setupMap);
+        
+        let points = [];
+        setupMap.on('click', (e) => {
+            if (!state.isHost) return;
+            points.push([e.latlng.lat, e.latlng.lng]);
+            if (zoneLayer) setupMap.removeLayer(zoneLayer);
+            zoneLayer = L.polygon(points, {color: '#bb86fc'}).addTo(setupMap);
+            state.settings.zone = points;
+            updateSettings('zone', points);
+        });
+
+        navigator.geolocation.getCurrentPosition(p => {
+            setupMap.setView([p.coords.latitude, p.coords.longitude], 16);
+        });
+    }
+
+    window.clearZone = () => {
+        if (zoneLayer) setupMap.removeLayer(zoneLayer);
+        state.settings.zone = null;
+        updateSettings('zone', null);
+    };
+
+    // --- Lobby Logic ---
+    window.openCreateModal = () => {
+        state.lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        joinLobby(state.lobbyId, true);
+    };
+
+    window.openJoinModal = () => {
+    showModal(`
+        <h3 style="margin-bottom:15px;">Rejoindre une partie</h3>
+        <input type="text" id="join-code" class="form-input" placeholder="CODE LOBBY" 
+               style="width:100%; text-transform: uppercase;">
+        <button class="btn" style="width:100%" id="btn-confirm-join">REJOINDRE</button>
+        <button class="btn btn-secondary" style="width:100%" onclick="closeModal()">ANNULER</button>
+    `);
+
+    // On attache l'événement après l'injection du HTML dans le DOM
+    document.getElementById('btn-confirm-join').onclick = () => {
+        const code = document.getElementById('join-code').value.trim().toUpperCase();
+        if (code.length > 3) {
+            joinLobby(code, false);
+        } else {
+            toast("Code invalide");
+        }
+    };
+};
+
+  
+  window.validateAndSyncSettings = () => {
+    if (!state.isHost) return;
+
+    let mCount = parseInt(document.getElementById('input-murder').value) || 1;
+    let duration = parseInt(document.getElementById('input-duration').value) || 10;
+    const playerCount = Object.keys(state.players).length;
+
+    // Limite à 50% des joueurs (minimum 1 murder)
+    const maxMurders = Math.max(1, Math.floor(playerCount / 2));
+    
+    if (mCount > maxMurders) {
+        mCount = maxMurders;
+        document.getElementById('input-murder').value = mCount;
+        toast(`Max murders pour ${playerCount} joueurs : ${maxMurders}`);
+    }
+
+    state.settings.murderCount = mCount;
+    state.settings.duration = duration;
+
+    update(ref(db, `lobbies/${state.lobbyId}/settings`), {
+        murderCount: mCount,
+        duration: duration
+    });
+};
+
+  window.leaveLobby = async () => {
+    if (state.lobbyId && state.playerKey) {
+        const playerRef = ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`);
+        await remove(playerRef);
+    }
+    location.reload(); // Retour au menu principal
+};
+
+
+async function joinLobby(id, host = false) {
+    if (!state.user) return openUserModal();
+    state.lobbyId = id;
+    state.isHost = host;
+    
+    const lobbyRef = ref(db, `lobbies/${id}`);
+    
+    // SI ON EST HOST : On initialise le statut du lobby sur Firebase immédiatement
+    if (host) {
+        await update(lobbyRef, { 
+            status: 'lobby', 
+            settings: state.settings 
+        });
+    }
+
+    const pRef = push(ref(db, `lobbies/${id}/players`));
+    state.playerKey = pRef.key;
+
+    const data = { name: state.user, ready: false, host, role: 'civil', eliminated: false };
+    await set(pRef, data);
+    onDisconnect(pRef).remove();
+
+    document.getElementById('screen-menu').classList.add('hidden');
+    document.getElementById('screen-lobby').classList.remove('hidden');
+    document.getElementById('lobby-code-display').innerText = `Lobby: ${id}`;
+    if (host) document.getElementById('host-settings').classList.remove('hidden');
+
+    closeModal();
+    listenLobby();
+}
+
+
+function listenLobby() {
+    onValue(ref(db, `lobbies/${state.lobbyId}`), (snap) => {
+        const data = snap.val();
+        if (!data) return;
+
+        // On s'assure que status existe, sinon on considère que c'est 'lobby'
+        const currentStatus = data.status || 'lobby'; 
+        state.players = data.players || {};
+        state.settings = { ...state.settings, ...data.settings };
+        
+        const playerEntries = Object.entries(state.players);
+        const playerCount = playerEntries.length;
+        
+        // On vérifie si tout le monde est prêt
+        const allReady = playerCount >= 2 && playerEntries.every(([_, p]) => p.ready);
+
+        // --- MISE À JOUR LISTE UI ---
+        const list = document.getElementById('players-list');
+        list.innerHTML = playerEntries.map(([_, p]) => `
+            <div class="player-item">
+                <span>${p.name} ${p.host ? '👑' : ''}</span>
+                <span style="color:${p.ready ? 'var(--civil)' : 'var(--error)'}">${p.ready ? 'PRÊT' : 'ATTENTE'}</span>
+            </div>
+        `).join('');
+
+        // LOG DE DEBUG (A vérifier dans la console du navigateur)
+        console.log("Status:", currentStatus, "AllReady:", allReady, "Host:", state.isHost);
+
+        // 1. LANCEMENT AUTOMATIQUE
+        if (state.isHost && currentStatus === 'lobby' && allReady) {
+            console.log("Lancement de la partie...");
+            assignRoles(); 
+        }
+
+        // 2. DÉTECTION DU START
+        if (currentStatus === 'starting' && state.status === 'lobby') {
+            startCountdown();
+        }
+
+        if (data.status === 'ended' && state.status !== 'ended') {
+            showResults(data.winner);
+        }
+        
+        const btn = document.getElementById('btn-ready');
+        if (btn && state.players[state.playerKey]) {
+            const isReady = state.players[state.playerKey].ready;
+            btn.innerText = isReady ? "ANNULER PRÊT" : "JE SUIS PRÊT";
+            btn.style.background = isReady ? "var(--surface)" : "var(--primary)";
+            btn.style.color = isReady ? "var(--primary)" : "var(--on-primary)";
+            btn.style.border = isReady ? "2px solid var(--primary)" : "none";
+        }
+    });
+}
+
+  
+let gameTimerInterval;
+
+function startTimer(durationMinutes, startTime) {
+    const timerDisplay = document.getElementById('timer');
+    const totalSeconds = durationMinutes * 60;
+
+    gameTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const remaining = totalSeconds - elapsed;
+
+        if (remaining <= 0) {
+            clearInterval(gameTimerInterval);
+            if (state.isHost) endGame('civil'); // Les civils gagnent si le temps est écoulé
+            return;
+        }
+
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        timerDisplay.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+
+    window.toggleReady = () => {
+    const currentStatus = state.players[state.playerKey].ready;
+    update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { 
+        ready: !currentStatus 
+    });
+};
+
+
+function startCountdown() {
+    state.status = 'starting';
+    
+    // Ajout d'un style d'animation rapide dans le document
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes pulse-white {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.5; }
+        }
+        .reveal-anim { animation: pulse-white 2s infinite ease-in-out; }
+    `;
+    document.head.appendChild(style);
+
+    showModal(`
+        <div style="text-align:center; padding: 30px 10px;">
+            <p style="text-transform:uppercase; letter-spacing:2px; font-size:0.9rem; opacity:0.8;">Début de l'opération</p>
+            <div class="reveal-anim" style="margin: 40px 0;">
+                <h1 id="reveal-text" style="font-size:3.5rem; color: white; text-shadow: 0 0 20px rgba(255,255,255,0.5);">???</h1>
+            </div>
+            <p id="countdown-timer" style="font-size:1.2rem; font-weight:bold; color:var(--primary);">15s</p>
+        </div>
+    `, false);
+
+    let timeLeft = 15;
+    const interval = setInterval(() => {
+        timeLeft--;
+        const timerEl = document.getElementById('countdown-timer');
+        if (timerEl) timerEl.innerText = timeLeft + "s";
+        
+        // Révélation immédiate du rôle mais en blanc
+        const myRole = state.players[state.playerKey].role;
+        state.role = myRole;
+        const revealEl = document.getElementById('reveal-text');
+        
+        if (revealEl) {
+            revealEl.innerText = myRole.toUpperCase();
+            // On force la couleur blanche peu importe le rôle
+            revealEl.style.color = "white"; 
+        }
+
+        if (timeLeft <= 0) {
+            clearInterval(interval);
+            closeModal();
+            if (state.isHost) {
+                update(ref(db, `lobbies/${state.lobbyId}`), { status: 'playing' });
+            }
+            enterGame();
+        }
+    }, 1000);
+}
+
+function assignRoles() {
+    const keys = Object.keys(state.players);
+    const playerCount = keys.length;
+
+    // Calcul du nombre de murders
+    const maxAllowed = Math.max(1, Math.floor(playerCount / 2));
+    let finalMurderCount = Math.min(parseInt(state.settings.murderCount) || 1, maxAllowed);
+
+    const shuffled = [...keys].sort(() => 0.5 - Math.random());
+    const murders = shuffled.slice(0, finalMurderCount);
+    
+    const updates = {};
+    keys.forEach(k => {
+        updates[`players/${k}/role`] = murders.includes(k) ? 'murder' : 'civil';
+        updates[`players/${k}/eliminated`] = false;
+    });
+
+    // On prépare le statut 'starting' sur Firebase
+    // Cela va déclencher l'affichage du rôle chez tout le monde via listenLobby
+    update(ref(db, `lobbies/${state.lobbyId}`), { 
+        ...updates,
+        status: 'starting', // <--- C'EST CA QUI DÉCLENCHE TOUT
+        startTime: Date.now() + 15000 
+    });
+}
+
+function enterGame() {
+    state.status = 'playing';
+    document.getElementById('screen-lobby').classList.add('hidden');
+    document.getElementById('screen-game').classList.remove('hidden');
+    
+    document.getElementById('hud-role').innerText = state.role.toUpperCase();
+    document.getElementById('hud-role').style.color = state.role === 'murder' ? 'var(--murder)' : 'var(--civil)';
+
+    // Initialisation Map
+    gameMap = L.map('gameMap', { zoomControl: false }).setView([48.85, 2.35], 18);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(gameMap);
+
+    if (state.settings.zone) {
+        L.polygon(state.settings.zone, {color: 'var(--primary)', fillOpacity: 0.1, weight: 2}).addTo(gameMap);
+    }
+
+    playerMarker = L.circleMarker([0,0], { radius: 10, color: 'white', fillColor: 'white', fillOpacity: 1 }).addTo(gameMap);
+
+    // Lancement du Timer de jeu (basé sur la durée en minutes)
+    onValue(ref(db, `lobbies/${state.lobbyId}/startTime`), (snap) => {
+        const startTime = snap.val();
+        if (startTime && !gameTimerInterval) {
+            startTimer(state.settings.duration, startTime);
+        }
+    }, { onlyOnce: true });
+
+    navigator.geolocation.watchPosition(updatePosition, null, { enableHighAccuracy: true });
+    onValue(ref(db, `lobbies/${state.lobbyId}`), syncGame);
+}
+
+
+function updatePosition(p) {
+    const userLatLng = [p.coords.latitude, p.coords.longitude];
+    state.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+    
+    playerMarker.setLatLng(userLatLng);
+    gameMap.panTo(userLatLng);
+    
+    // Mise à jour Firebase
+    update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { pos: state.pos });
+
+    // --- LOGIQUE DE ZONE ---
+    if (state.status === 'playing' && state.settings.zone && !state.players[state.playerKey].eliminated) {
+        // Turf utilise le format [lng, lat]
+        const pt = turf.point([state.pos.lng, state.pos.lat]);
+        const poly = turf.polygon([state.settings.zone.map(z => [z[1], z[0]])]); // Conversion pour Turf
+        
+        const isInside = turf.booleanPointInPolygon(pt, poly);
+
+        if (!isInside && !state.isOutOfZone) {
+            startZoneWarning();
+        } else if (isInside && state.isOutOfZone) {
+            stopZoneWarning();
+        }
+    }
+
+    // Logique Murder
+    if (state.role === 'murder' && !state.players[state.playerKey].eliminated) {
+        checkBonusCollection();
+        checkKillProximity();
+    }
+}
+
+
+    let lastEliminatedCount = 0;
+
+function syncGame(snap) {
+    const data = snap.val();
+    if (!data) return;
+    const players = data.players;
+    state.bonusZones = data.bonusZones || [];
+
+    // Notification d'élimination globale
+    const currentEliminated = Object.values(players).filter(p => p.eliminated).length;
+    if (currentEliminated > lastEliminatedCount) {
+        toast("UN JOUEUR A ÉTÉ ÉLIMINÉ !");
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        lastEliminatedCount = currentEliminated;
+    }
+
+    // Mise à jour de mon état de mort
+    if (players[state.playerKey].eliminated && !state.isGhost) {
+        becomeGhost();
+    }
+
+    // Affichage HUD
+    const alive = Object.values(players).filter(p => !p.eliminated).length;
+    document.getElementById('alive-count').innerText = alive;
+
+    // --- Logique d'affichage des markers (Gardée de ton code) ---
+    otherMarkers.forEach(m => gameMap.removeLayer(m));
+    bonusMarkers.forEach(m => gameMap.removeLayer(m));
+
+    if (state.role === 'murder' && !state.isGhost) {
+        state.bonusZones.forEach(z => {
+            if (!z.used) {
+                const m = L.circle([z.lat, z.lng], {radius: 2.5, color: 'gold', fillOpacity: 0.6}).addTo(gameMap);
+                bonusMarkers.push(m);
+            }
+        });
+        
+        document.getElementById('bonus-status').classList.remove('hidden');
+        document.getElementById('bonus-status').innerText = `KILL: ${state.bonuses.kill?'OUI':'NON'} | VOIR: ${state.bonuses.seeAll?'TOUS':(state.bonuses.seeMurders?'MURDERS':'NON')}`;
+    }
+
+    // Visibilité des autres joueurs
+    Object.keys(players).forEach(k => {
+        const p = players[k];
+        if (k === state.playerKey || p.eliminated || !p.pos) return;
+
+        let show = false;
+        let color = 'blue';
+
+        if (state.bonuses.seeAll) { 
+            show = true; 
+            color = p.role === 'murder' ? 'red' : 'blue'; 
+        } else if (state.bonuses.seeMurders && p.role === 'murder') { 
+            show = true; 
+            color = 'red'; 
+        }
+
+        if (show) {
+            const m = L.circleMarker([p.pos.lat, p.pos.lng], {radius: 8, color, fillOpacity: 0.5}).addTo(gameMap);
+            otherMarkers.push(m);
+        }
+    });
+
+    if (state.isHost && data.status === 'playing') checkWinConditions(players);
+}
+
+
+    function checkBonusCollection() {
+        state.bonusZones.forEach((z, i) => {
+            if (z.used) return;
+            const dist = turf.distance([state.pos.lng, state.pos.lat], [z.lng, z.lat], {units: 'meters'});
+            if (dist < 5) {
+                update(ref(db, `lobbies/${state.lobbyId}/bonusZones/${i}`), { used: true });
+                giveRandomBonus();
+            }
+        });
+    }
+
+    function giveRandomBonus() {
+        if (!state.bonuses.kill) state.bonuses.kill = true;
+        else if (!state.bonuses.seeMurders) state.bonuses.seeMurders = true;
+        else if (!state.bonuses.seeAll) state.bonuses.seeAll = true;
+        toast("BONUS RÉCUPÉRÉ !");
+    }
+
+    function checkKillProximity() {
+        if (!state.bonuses.kill) return;
+        state.nearbyPlayer = null;
+        Object.keys(state.players).forEach(k => {
+            const p = state.players[k];
+            if (k === state.playerKey || p.eliminated || !p.pos) return;
+            
+            const dist = turf.distance([state.pos.lng, state.pos.lat], [p.pos.lng, p.pos.lat], {units: 'meters'});
+            if (dist < 1.5) state.nearbyPlayer = {key: k, name: p.name};
+        });
+
+        const btn = document.getElementById('btn-eliminate');
+        if (state.nearbyPlayer) {
+            btn.style.display = 'block';
+            btn.innerText = `ÉLIMINER ${state.nearbyPlayer.name.toUpperCase()}`;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    window.doEliminate = () => {
+        if (!state.nearbyPlayer) return;
+        update(ref(db, `lobbies/${state.lobbyId}/players/${state.nearbyPlayer.key}`), { eliminated: true, killedAt: Date.now() });
+        toast(`Tu as tué ${state.nearbyPlayer.name} !`);
+    };
+
+    function becomeGhost() {
+        state.isGhost = true;
+        document.getElementById('gameMap').classList.add('ghost-mode');
+        toast("TU AS ÉTÉ ÉLIMINÉ ! Tu es maintenant un fantôme.");
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+
+    function checkWinConditions(players) {
+        const pArr = Object.values(players);
+        const civilians = pArr.filter(p => p.role === 'civil' && !p.eliminated);
+        const murders = pArr.filter(p => p.role === 'murder' && !p.eliminated);
+
+        if (civilians.length === 0) endGame('murder');
+        else if (murders.length === 0) endGame('civil');
+    }
+
+    function checkTimers() {
+        // Logique de temps simplifié
+    }
+
+    function endGame(winner) {
+        update(ref(db, `lobbies/${state.lobbyId}`), { status: 'ended', winner });
+        showResults(winner);
+    }
+
+    function showResults(winner) {
+        document.getElementById('screen-game').classList.add('hidden');
+        document.getElementById('screen-results').classList.remove('hidden');
+        document.getElementById('winner-text').innerText = winner === 'murder' ? "LES MURDERS ONT GAGNÉ" : "LES CIVILS ONT GAGNÉ";
+        
+        const sorted = Object.values(state.players).sort((a,b) => (b.killedAt || 9999999999999) - (a.killedAt || 9999999999999));
+        document.getElementById('ranking-list').innerHTML = sorted.map((p, i) => `
+            <div class="player-item">
+                <span>#${i+1} ${p.name}</span>
+                <span>${p.eliminated ? 'Mort' : 'Survivant'}</span>
+            </div>
+        `).join('');
+    }
+
+    // --- Helpers ---
+    function openUserModal() {
+        showModal(`
+            <h3>Pseudo</h3>
+            <input type="text" id="user-name" class="form-input" placeholder="Ton nom" style="width:100%">
+            <button class="btn" style="width:100%" onclick="saveUser()">VALIDER</button>
+        `, false);
+    }
+
+    window.saveUser = () => {
+        const name = document.getElementById('user-name').value.trim();
+        if (name.length < 2 || bannedWords.some(w => name.toLowerCase().includes(w))) {
+            return toast("Nom invalide ou banni", "error");
+        }
+        state.user = name;
+        localStorage.setItem('m_user', name);
+        closeModal();
+    };
+
+    function updateSettings(key, val) {
+        if (!state.lobbyId || !state.isHost) return;
+        update(ref(db, `lobbies/${state.lobbyId}/settings`), { [key]: val });
+    }
+
+    function showModal(html, closable = true) {
+        const overlay = document.getElementById('modal-container');
+        const content = document.getElementById('modal-content');
+        content.innerHTML = html;
+        overlay.classList.remove('hidden');
+        if (!closable) content.innerHTML += ''; // Pas de bouton
+    }
+
+    window.closeModal = () => document.getElementById('modal-container').classList.add('hidden');
+
+    function toast(msg) {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.innerText = msg;
+        document.getElementById('toastContainer').appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+
+  function startZoneWarning() {
+    state.isOutOfZone = true;
+    toast("⚠️ HORS ZONE ! Retourne vite à l'intérieur (5s) !");
+    
+    let timeLeft = 5;
+    state.outOfZoneTimer = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+            toast(`HORS ZONE : ${timeLeft}s restantes !`);
+            if (navigator.vibrate) navigator.vibrate(200);
+        } else {
+            eliminateForLeavingZone();
+        }
+    }, 1000);
+}
+
+function stopZoneWarning() {
+    state.isOutOfZone = false;
+    clearInterval(state.outOfZoneTimer);
+    toast("✅ De retour dans la zone.");
+}
+
+function eliminateForLeavingZone() {
+    clearInterval(state.outOfZoneTimer);
+    if (state.players[state.playerKey].eliminated) return;
+
+    update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { 
+        eliminated: true, 
+        deathReason: "Sortie de zone",
+        killedAt: Date.now() 
+    });
+    
+    showModal(`
+        <h2 style="color:var(--error);">ÉLIMINÉ</h2>
+        <p>Tu es sorti de la zone de jeu trop longtemps !</p>
+        <button class="btn" onclick="closeModal()">Continuer en Fantôme</button>
+    `);
+}
+
+  
+</script>
+</body>
+</html>
