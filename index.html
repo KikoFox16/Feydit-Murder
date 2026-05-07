@@ -250,20 +250,38 @@ input[type=range] {
     <div id="players-list"></div>
     
     <div id="host-settings" class="hidden" style="background: var(--surface); padding: 15px; border-radius: 12px; margin-bottom: 10px;">
-        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1;">
-                <label style="font-size: 0.7rem; color: var(--primary);">MURDERS</label>
-                <input type="number" id="input-murder" class="form-input" value="1" min="1" style="width: 100%; margin: 5px 0 0 0;" onchange="validateAndSyncSettings()">
-            </div>
-            <div style="flex: 1;">
-                <label style="font-size: 0.7rem; color: var(--primary);">MINUTES</label>
-                <input type="number" id="input-duration" class="form-input" value="10" min="2" style="width: 100%; margin: 5px 0 0 0;" onchange="validateAndSyncSettings()">
-            </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <div>
+            <label style="font-size: 0.7rem; color: var(--primary);">MODE</label>
+            <select id="input-mode" class="form-input" style="width: 100%;" onchange="validateAndSyncSettings()">
+                <option value="classic">CLASSIQUE</option>
+                <option value="justice">JUSTICIER</option>
+                <option value="infection">INFECTION</option>
+            </select>
         </div>
-        <button class="btn btn-secondary" style="width: 100%; font-size: 0.8rem;" onclick="openZoneEditor()">
-            📍 DÉFINIR LA ZONE DE JEU
-        </button>
+        <div>
+            <label style="font-size: 0.7rem; color: var(--primary);">KILL DIRECT</label>
+            <select id="input-instant-kill" class="form-input" style="width: 100%;" onchange="validateAndSyncSettings()">
+                <option value="false">NON</option>
+                <option value="true">OUI</option>
+            </select>
+        </div>
     </div>
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <div style="flex: 1;">
+            <label style="font-size: 0.7rem; color: var(--primary);">MURDERS</label>
+            <input type="number" id="input-murder" class="form-input" value="1" min="1" style="width: 100%;" onchange="validateAndSyncSettings()">
+        </div>
+        <div style="flex: 1;">
+            <label style="font-size: 0.7rem; color: var(--primary);">MINUTES</label>
+            <input type="number" id="input-duration" class="form-input" value="10" min="2" style="width: 100%;" onchange="validateAndSyncSettings()">
+        </div>
+    </div>
+    <button class="btn btn-secondary" style="width: 100%; font-size: 0.8rem;" onclick="openZoneEditor()">
+        📍 DÉFINIR LA ZONE DE JEU
+    </button>
+</div>
+
 
     <button id="btn-ready" class="btn" onclick="toggleReady()">Prêt</button>
     <button class="btn btn-danger" onclick="leaveLobby()">Quitter</button>
@@ -327,7 +345,7 @@ input[type=range] {
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // --- State ---
+
     let state = {
         user: localStorage.getItem('m_user') || '',
         lobbyId: null,
@@ -348,14 +366,12 @@ input[type=range] {
     const bannedWords = ['fuck', 'merde', 'pute', 'salope', 'connard', 'nique'];
     let setupMap, gameMap, zoneLayer, playerMarker, bonusMarkers = [], otherMarkers = [];
 
-    // --- Init ---
     window.onload = () => {
         if (!state.user) openUserModal();
         initSetupMap();
     };
 
 window.openZoneEditor = () => {
-    // On crée une interface plein écran temporaire
     const editorHtml = `
         <div id="zone-editor-ui" style="position:fixed; inset:0; z-index:9999; background:var(--background); display:flex; flex-direction:column; padding:10px;">
             <h3 style="text-align:center; padding:10px;">Tapez la carte pour tracer la zone</h3>
@@ -368,7 +384,6 @@ window.openZoneEditor = () => {
     `;
     document.body.insertAdjacentHTML('beforeend', editorHtml);
 
-    // Initialisation de la grande carte
     const bigMap = L.map('bigSetupMap').setView(state.pos ? [state.pos.lat, state.pos.lng] : [48.8566, 2.3522], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(bigMap);
 
@@ -385,7 +400,6 @@ window.openZoneEditor = () => {
         tempLayer = L.polygon(tempPoints, {color: '#bb86fc'}).addTo(bigMap);
     });
 
-    // Fonctions internes à l'éditeur
     window.confirmZone = () => {
         state.settings.zone = tempPoints;
         updateSettings('zone', tempPoints);
@@ -398,14 +412,12 @@ window.openZoneEditor = () => {
         if (tempLayer) bigMap.removeLayer(tempLayer);
     };
 
-    // Centrer sur l'utilisateur si possible
     navigator.geolocation.getCurrentPosition(p => {
         bigMap.setView([p.coords.latitude, p.coords.longitude], 16);
     });
 };
 
 
-    // --- Maps Logic ---
     function initSetupMap() {
         setupMap = L.map('setupMap').setView([48.8566, 2.3522], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(setupMap);
@@ -431,7 +443,6 @@ window.openZoneEditor = () => {
         updateSettings('zone', null);
     };
 
-    // --- Lobby Logic ---
     window.openCreateModal = () => {
         state.lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
         joinLobby(state.lobbyId, true);
@@ -446,7 +457,6 @@ window.openZoneEditor = () => {
         <button class="btn btn-secondary" style="width:100%" onclick="closeModal()">ANNULER</button>
     `);
 
-    // On attache l'événement après l'injection du HTML dans le DOM
     document.getElementById('btn-confirm-join').onclick = () => {
         const code = document.getElementById('join-code').value.trim().toUpperCase();
         if (code.length > 3) {
@@ -458,37 +468,34 @@ window.openZoneEditor = () => {
 };
 
   
-  window.validateAndSyncSettings = () => {
+window.validateAndSyncSettings = () => {
     if (!state.isHost) return;
 
     let mCount = parseInt(document.getElementById('input-murder').value) || 1;
     let duration = parseInt(document.getElementById('input-duration').value) || 10;
+    let mode = document.getElementById('input-mode').value;
+    let instantKill = document.getElementById('input-instant-kill').value === "true";
+    
     const playerCount = Object.keys(state.players).length;
-
-    // Limite à 50% des joueurs (minimum 1 murder)
     const maxMurders = Math.max(1, Math.floor(playerCount / 2));
     
     if (mCount > maxMurders) {
         mCount = maxMurders;
         document.getElementById('input-murder').value = mCount;
-        toast(`Max murders pour ${playerCount} joueurs : ${maxMurders}`);
     }
 
-    state.settings.murderCount = mCount;
-    state.settings.duration = duration;
+    state.settings = { ...state.settings, murderCount: mCount, duration: duration, mode, instantKill };
 
-    update(ref(db, `lobbies/${state.lobbyId}/settings`), {
-        murderCount: mCount,
-        duration: duration
-    });
+    update(ref(db, `lobbies/${state.lobbyId}/settings`), state.settings);
 };
+
 
   window.leaveLobby = async () => {
     if (state.lobbyId && state.playerKey) {
         const playerRef = ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`);
         await remove(playerRef);
     }
-    location.reload(); // Retour au menu principal
+    location.reload(); 
 };
 
 
@@ -499,7 +506,6 @@ async function joinLobby(id, host = false) {
     
     const lobbyRef = ref(db, `lobbies/${id}`);
     
-    // SI ON EST HOST : On initialise le statut du lobby sur Firebase immédiatement
     if (host) {
         await update(lobbyRef, { 
             status: 'lobby', 
@@ -529,7 +535,6 @@ function listenLobby() {
         const data = snap.val();
         if (!data) return;
 
-        // On s'assure que status existe, sinon on considère que c'est 'lobby'
         const currentStatus = data.status || 'lobby'; 
         state.players = data.players || {};
         state.settings = { ...state.settings, ...data.settings };
@@ -537,10 +542,8 @@ function listenLobby() {
         const playerEntries = Object.entries(state.players);
         const playerCount = playerEntries.length;
         
-        // On vérifie si tout le monde est prêt
         const allReady = playerCount >= 2 && playerEntries.every(([_, p]) => p.ready);
 
-        // --- MISE À JOUR LISTE UI ---
         const list = document.getElementById('players-list');
         list.innerHTML = playerEntries.map(([_, p]) => `
             <div class="player-item">
@@ -549,16 +552,13 @@ function listenLobby() {
             </div>
         `).join('');
 
-        // LOG DE DEBUG (A vérifier dans la console du navigateur)
         console.log("Status:", currentStatus, "AllReady:", allReady, "Host:", state.isHost);
 
-        // 1. LANCEMENT AUTOMATIQUE
         if (state.isHost && currentStatus === 'lobby' && allReady) {
             console.log("Lancement de la partie...");
             assignRoles(); 
         }
 
-        // 2. DÉTECTION DU START
         if (currentStatus === 'starting' && state.status === 'lobby') {
             startCountdown();
         }
@@ -591,7 +591,7 @@ function startTimer(durationMinutes, startTime) {
 
         if (remaining <= 0) {
             clearInterval(gameTimerInterval);
-            if (state.isHost) endGame('civil'); // Les civils gagnent si le temps est écoulé
+            if (state.isHost) endGame('civil'); 
             return;
         }
 
@@ -613,7 +613,6 @@ function startTimer(durationMinutes, startTime) {
 function startCountdown() {
     state.status = 'starting';
     
-    // Ajout d'un style d'animation rapide dans le document
     const style = document.createElement('style');
     style.innerHTML = `
         @keyframes pulse-white {
@@ -641,14 +640,12 @@ function startCountdown() {
         const timerEl = document.getElementById('countdown-timer');
         if (timerEl) timerEl.innerText = timeLeft + "s";
         
-        // Révélation immédiate du rôle mais en blanc
         const myRole = state.players[state.playerKey].role;
         state.role = myRole;
         const revealEl = document.getElementById('reveal-text');
         
         if (revealEl) {
             revealEl.innerText = myRole.toUpperCase();
-            // On force la couleur blanche peu importe le rôle
             revealEl.style.color = "white"; 
         }
 
@@ -666,28 +663,35 @@ function startCountdown() {
 function assignRoles() {
     const keys = Object.keys(state.players);
     const playerCount = keys.length;
+    const mode = state.settings.mode || 'classic';
 
-    // Calcul du nombre de murders
-    const maxAllowed = Math.max(1, Math.floor(playerCount / 2));
-    let finalMurderCount = Math.min(parseInt(state.settings.murderCount) || 1, maxAllowed);
+    let finalMurderCount = Math.min(parseInt(state.settings.murderCount) || 1, Math.max(1, Math.floor(playerCount / 2)));
 
     const shuffled = [...keys].sort(() => 0.5 - Math.random());
     const murders = shuffled.slice(0, finalMurderCount);
     
+    // Si mode justice, le prochain joueur après les murders est le justicier
+    let justicePlayer = (mode === 'justice' && playerCount > 2) ? shuffled[finalMurderCount] : null;
+    
     const updates = {};
     keys.forEach(k => {
-        updates[`players/${k}/role`] = murders.includes(k) ? 'murder' : 'civil';
+        let role = 'civil';
+        if (murders.includes(k)) role = 'murder';
+        else if (k === justicePlayer) role = 'justice';
+
+        updates[`players/${k}/role`] = role;
         updates[`players/${k}/eliminated`] = false;
+        // Si l'option "Instant Kill" est activée, on donne déjà le bonus
+        updates[`players/${k}/hasKillBonus`] = (role === 'murder' && state.settings.instantKill) || role === 'justice';
     });
 
-    // On prépare le statut 'starting' sur Firebase
-    // Cela va déclencher l'affichage du rôle chez tout le monde via listenLobby
     update(ref(db, `lobbies/${state.lobbyId}`), { 
         ...updates,
-        status: 'starting', // <--- C'EST CA QUI DÉCLENCHE TOUT
+        status: 'starting', 
         startTime: Date.now() + 15000 
     });
 }
+
 
 function enterGame() {
     state.status = 'playing';
@@ -697,7 +701,6 @@ function enterGame() {
     document.getElementById('hud-role').innerText = state.role.toUpperCase();
     document.getElementById('hud-role').style.color = state.role === 'murder' ? 'var(--murder)' : 'var(--civil)';
 
-    // Initialisation Map
     gameMap = L.map('gameMap', { zoomControl: false }).setView([48.85, 2.35], 18);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(gameMap);
 
@@ -707,7 +710,6 @@ function enterGame() {
 
     playerMarker = L.circleMarker([0,0], { radius: 10, color: 'white', fillColor: 'white', fillOpacity: 1 }).addTo(gameMap);
 
-    // Lancement du Timer de jeu (basé sur la durée en minutes)
     onValue(ref(db, `lobbies/${state.lobbyId}/startTime`), (snap) => {
         const startTime = snap.val();
         if (startTime && !gameTimerInterval) {
@@ -727,14 +729,11 @@ function updatePosition(p) {
     playerMarker.setLatLng(userLatLng);
     gameMap.panTo(userLatLng);
     
-    // Mise à jour Firebase
     update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { pos: state.pos });
 
-    // --- LOGIQUE DE ZONE ---
     if (state.status === 'playing' && state.settings.zone && !state.players[state.playerKey].eliminated) {
-        // Turf utilise le format [lng, lat]
         const pt = turf.point([state.pos.lng, state.pos.lat]);
-        const poly = turf.polygon([state.settings.zone.map(z => [z[1], z[0]])]); // Conversion pour Turf
+        const poly = turf.polygon([state.settings.zone.map(z => [z[1], z[0]])]); 
         
         const isInside = turf.booleanPointInPolygon(pt, poly);
 
@@ -745,7 +744,6 @@ function updatePosition(p) {
         }
     }
 
-    // Logique Murder
     if (state.role === 'murder' && !state.players[state.playerKey].eliminated) {
         checkBonusCollection();
         checkKillProximity();
@@ -758,10 +756,16 @@ function updatePosition(p) {
 function syncGame(snap) {
     const data = snap.val();
     if (!data) return;
-    const players = data.players;
+    
+    // Définir les variables d'abord
+    const players = data.players || {};
     state.bonusZones = data.bonusZones || [];
 
-    // Notification d'élimination globale
+    // Maintenant on peut synchroniser le bonus de kill local
+    if (players[state.playerKey]) {
+        state.bonuses.kill = players[state.playerKey].hasKillBonus || false;
+    }
+
     const currentEliminated = Object.values(players).filter(p => p.eliminated).length;
     if (currentEliminated > lastEliminatedCount) {
         toast("UN JOUEUR A ÉTÉ ÉLIMINÉ !");
@@ -769,19 +773,17 @@ function syncGame(snap) {
         lastEliminatedCount = currentEliminated;
     }
 
-    // Mise à jour de mon état de mort
     if (players[state.playerKey].eliminated && !state.isGhost) {
         becomeGhost();
     }
 
-    // Affichage HUD
     const alive = Object.values(players).filter(p => !p.eliminated).length;
     document.getElementById('alive-count').innerText = alive;
 
-    // --- Logique d'affichage des markers (Gardée de ton code) ---
     otherMarkers.forEach(m => gameMap.removeLayer(m));
     bonusMarkers.forEach(m => gameMap.removeLayer(m));
 
+    // Affichage des bonus pour le Murder
     if (state.role === 'murder' && !state.isGhost) {
         state.bonusZones.forEach(z => {
             if (!z.used) {
@@ -794,7 +796,7 @@ function syncGame(snap) {
         document.getElementById('bonus-status').innerText = `KILL: ${state.bonuses.kill?'OUI':'NON'} | VOIR: ${state.bonuses.seeAll?'TOUS':(state.bonuses.seeMurders?'MURDERS':'NON')}`;
     }
 
-    // Visibilité des autres joueurs
+    // Affichage des autres joueurs sur la carte
     Object.keys(players).forEach(k => {
         const p = players[k];
         if (k === state.playerKey || p.eliminated || !p.pos) return;
@@ -820,6 +822,7 @@ function syncGame(snap) {
 }
 
 
+
     function checkBonusCollection() {
         state.bonusZones.forEach((z, i) => {
             if (z.used) return;
@@ -838,31 +841,75 @@ function syncGame(snap) {
         toast("BONUS RÉCUPÉRÉ !");
     }
 
-    function checkKillProximity() {
-        if (!state.bonuses.kill) return;
-        state.nearbyPlayer = null;
-        Object.keys(state.players).forEach(k => {
-            const p = state.players[k];
-            if (k === state.playerKey || p.eliminated || !p.pos) return;
-            
-            const dist = turf.distance([state.pos.lng, state.pos.lat], [p.pos.lng, p.pos.lat], {units: 'meters'});
-            if (dist < 1.5) state.nearbyPlayer = {key: k, name: p.name};
-        });
-
-        const btn = document.getElementById('btn-eliminate');
-        if (state.nearbyPlayer) {
-            btn.style.display = 'block';
-            btn.innerText = `ÉLIMINER ${state.nearbyPlayer.name.toUpperCase()}`;
-        } else {
-            btn.style.display = 'none';
-        }
+function checkKillProximity() {
+    // Le Murder doit avoir le bonus (ou instantKill), le Justicier l'a toujours
+    const canKill = (state.role === 'murder' && state.bonuses.kill) || (state.role === 'justice');
+    
+    if (!canKill || state.players[state.playerKey].eliminated) {
+        document.getElementById('btn-eliminate').style.display = 'none';
+        return;
     }
 
+    state.nearbyPlayer = null;
+    Object.keys(state.players).forEach(k => {
+        const p = state.players[k];
+        if (k === state.playerKey || p.eliminated || !p.pos) return;
+        
+        const dist = turf.distance([state.pos.lng, state.pos.lat], [p.pos.lng, p.pos.lat], {units: 'meters'});
+        if (dist < 2.0) { // Rayon de 2m pour plus de souplesse sur mobile
+            state.nearbyPlayer = {key: k, name: p.name, role: p.role};
+        }
+    });
+
+    const btn = document.getElementById('btn-eliminate');
+    if (state.nearbyPlayer) {
+        btn.style.display = 'block';
+        const actionText = (state.role === 'justice') ? "RENDRE JUSTICE" : "ÉLIMINER";
+        btn.innerText = `${actionText} ${state.nearbyPlayer.name.toUpperCase()}`;
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+
     window.doEliminate = () => {
-        if (!state.nearbyPlayer) return;
-        update(ref(db, `lobbies/${state.lobbyId}/players/${state.nearbyPlayer.key}`), { eliminated: true, killedAt: Date.now() });
-        toast(`Tu as tué ${state.nearbyPlayer.name} !`);
-    };
+    if (!state.nearbyPlayer) return;
+    const mode = state.settings.mode || 'classic';
+    const target = state.nearbyPlayer;
+
+    // --- LOGIQUE JUSTICIER ---
+    if (state.role === 'justice') {
+        if (target.role === 'civil') {
+            // Le justicier s'est trompé : il meurt aussi
+            update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { eliminated: true, killedAt: Date.now(), deathReason: "Erreur judiciaire" });
+            update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { eliminated: true, killedAt: Date.now() });
+            toast("Tu as tué un innocent ! Tu es éliminé.");
+        } else {
+            // Il a tué un murder
+            update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { eliminated: true, killedAt: Date.now() });
+            toast(`BRAVO ! ${target.name} était un Murder.`);
+        }
+    } 
+    // --- LOGIQUE INFECTION ---
+    else if (state.role === 'murder' && mode === 'infection') {
+        update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { 
+            role: 'murder', 
+            hasKillBonus: true // Le nouveau infecté peut tuer direct
+        });
+        toast(`Tu as infecté ${target.name} !`);
+    }
+    // --- LOGIQUE CLASSIQUE ---
+    else {
+        update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { eliminated: true, killedAt: Date.now() });
+        toast(`Tu as éliminé ${target.name} !`);
+    }
+
+    // Consomme le bonus de kill s'il n'est pas en "Instant Kill"
+    if (state.role === 'murder' && !state.settings.instantKill) {
+        state.bonuses.kill = false;
+    }
+};
+
 
     function becomeGhost() {
         state.isGhost = true;
@@ -903,7 +950,6 @@ function syncGame(snap) {
         `).join('');
     }
 
-    // --- Helpers ---
     function openUserModal() {
         showModal(`
             <h3>Pseudo</h3>
@@ -932,7 +978,7 @@ function syncGame(snap) {
         const content = document.getElementById('modal-content');
         content.innerHTML = html;
         overlay.classList.remove('hidden');
-        if (!closable) content.innerHTML += ''; // Pas de bouton
+        if (!closable) content.innerHTML += ''; 
     }
 
     window.closeModal = () => document.getElementById('modal-container').classList.add('hidden');
@@ -987,4 +1033,4 @@ function eliminateForLeavingZone() {
   
 </script>
 </body>
-</html>
+</html>   
