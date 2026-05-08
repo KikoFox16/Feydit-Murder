@@ -842,8 +842,11 @@ function syncGame(snap) {
     }
 
 function checkKillProximity() {
-    // Le Murder doit avoir le bonus (ou instantKill), le Justicier l'a toujours
-    const canKill = (state.role === 'murder' && state.bonuses.kill) || (state.role === 'justice');
+    // On récupère le réglage Instant Kill directement depuis l'état global
+    const isInstantKill = state.settings.instantKill === true || state.settings.instantKill === "true";
+    
+    // Le Murder peut tuer s'il a le bonus OU si le mode Instant Kill est activé
+    const canKill = (state.role === 'murder' && (state.bonuses.kill || isInstantKill)) || (state.role === 'justice');
     
     if (!canKill || state.players[state.playerKey].eliminated) {
         document.getElementById('btn-eliminate').style.display = 'none';
@@ -855,8 +858,16 @@ function checkKillProximity() {
         const p = state.players[k];
         if (k === state.playerKey || p.eliminated || !p.pos) return;
         
-        const dist = turf.distance([state.pos.lng, state.pos.lat], [p.pos.lng, p.pos.lat], {units: 'meters'});
-        if (dist < 5.0) { // Rayon de 2m pour plus de souplesse sur mobile
+        const dist = turf.distance(
+            [state.pos.lng, state.pos.lat], 
+            [p.pos.lng, p.pos.lat], 
+            {units: 'meters'}
+        );
+
+        // Debug console pour voir la distance réelle calculée (ouvre F12 sur PC)
+        // console.log(`Distance avec ${p.name}: ${dist}m`);
+
+        if (dist <= 7.0) { // On passe à 7m pour compenser l'imprécision du GPS mobile
             state.nearbyPlayer = {key: k, name: p.name, role: p.role};
         }
     });
