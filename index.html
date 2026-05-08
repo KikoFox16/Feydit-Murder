@@ -856,7 +856,7 @@ function checkKillProximity() {
         if (k === state.playerKey || p.eliminated || !p.pos) return;
         
         const dist = turf.distance([state.pos.lng, state.pos.lat], [p.pos.lng, p.pos.lat], {units: 'meters'});
-        if (dist < 2.0) { // Rayon de 2m pour plus de souplesse sur mobile
+        if (dist < 5.0) { // Rayon de 2m pour plus de souplesse sur mobile
             state.nearbyPlayer = {key: k, name: p.name, role: p.role};
         }
     });
