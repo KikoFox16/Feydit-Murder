@@ -726,9 +726,14 @@ function enterGame() {
     playerMarker = L.circleMarker([0,0], { radius: 10, color: 'white', fillColor: 'white', fillOpacity: 1 }).addTo(gameMap);
 
     // Actualisation toutes les 10 secondes
-    setInterval(() => {
-        navigator.geolocation.getCurrentPosition(updatePosition, null, { enableHighAccuracy: true });
-    }, 10000); 
+    navigator.geolocation.watchPosition(updatePosition, 
+    (err) => console.error(err), 
+    { 
+        enableHighAccuracy: true, 
+        maximumAge: 1000, 
+        timeout: 5000 
+    }
+);
 
     // Premier appel immédiat
     navigator.geolocation.getCurrentPosition(updatePosition, null, { enableHighAccuracy: true });
@@ -857,34 +862,49 @@ function syncGame(snap) {
     }
 
     function giveRandomBonus() {
-        if (!state.bonuses.kill) state.bonuses.kill = true;
-        else if (!state.bonuses.seeMurders) state.bonuses.seeMurders = true;
-        else if (!state.bonuses.seeAll) state.bonuses.seeAll = true;
-        toast("BONUS RÉCUPÉRÉ !");
+    let updates = {};
+    if (!state.bonuses.kill) {
+        state.bonuses.kill = true;
+        updates[`players/${state.playerKey}/hasKillBonus`] = true;
+    } else if (!state.bonuses.seeMurders) {
+        state.bonuses.seeMurders = true;
+        // On peut ajouter d'autres flags dans Firebase si besoin
+    } else if (!state.bonuses.seeAll) {
+        state.bonuses.seeAll = true;
     }
+    
+    // Envoi à Firebase
+    update(ref(db, `lobbies/${state.lobbyId}`), updates);
+    toast("BONUS RÉCUPÉRÉ !");
+}
+
 
 function checkKillProximity() {
     const isInstantKill = String(state.settings.instantKill) === "true";
     const canKill = (state.role === 'murder' && (state.bonuses.kill || isInstantKill)) || (state.role === 'justice');
     
-    if (!canKill || state.players[state.playerKey].eliminated) {
+    // On cache le bouton si le joueur ne peut pas tuer ou est mort
+    if (!canKill || !state.pos || state.players[state.playerKey].eliminated) {
         document.getElementById('btn-eliminate').style.display = 'none';
         return;
     }
 
     state.nearbyPlayer = null;
+    let minDistance = 20; // Seuil de 20 mètres
+
     Object.keys(state.players).forEach(k => {
         const p = state.players[k];
+        
+        // On ignore soi-même, les morts, et ceux qui n'ont pas de position
         if (k === state.playerKey || p.eliminated || !p.pos) return;
         
-        // Calcul de distance en mètres
-        const dist = turf.distance(
-            turf.point([state.pos.lng, state.pos.lat]), 
-            turf.point([p.pos.lng, p.pos.lat]), 
-            {units: 'meters'}
-        );
+        // Conversion explicite en tableaux [longitude, latitude] pour Turf
+        const from = [state.pos.lng, state.pos.lat];
+        const to = [p.pos.lng, p.pos.lat];
 
-        if (dist <= 15.0) { // Portée augmentée à 15m
+        const dist = turf.distance(from, to, {units: 'meters'});
+
+        if (dist <= minDistance) {
             state.nearbyPlayer = {key: k, name: p.name, role: p.role};
         }
     });
@@ -897,8 +917,6 @@ function checkKillProximity() {
         btn.style.display = 'none';
     }
 }
-
-
 
     window.doEliminate = () => {
     if (!state.nearbyPlayer) return;
