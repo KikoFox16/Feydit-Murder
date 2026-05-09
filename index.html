@@ -750,6 +750,7 @@ function enterGame() {
     }, { onlyOnce: true });
 
     onValue(ref(db, `lobbies/${state.lobbyId}`), syncGame);
+    listenForKillRequests(); 
 }
 
 
@@ -899,34 +900,40 @@ function updateKillButtonVisibility() {
     }
 }
 
-// 3. OUVERTURE DU MODAL DE SÉLECTION
 window.openKillList = () => {
+    const mode = state.settings.mode || 'classic';
     const alivePlayers = Object.entries(state.players)
-        .filter(([key, p]) => !p.eliminated && key !== state.playerKey);
+        .filter(([key, p]) => {
+            const isMe = key === state.playerKey;
+            const isEliminated = p.eliminated;
+            
+            // En mode infection, un murder ne liste pas les autres murders
+            if (mode === 'infection' && state.role === 'murder') {
+                return !isMe && !isEliminated && p.role !== 'murder';
+            }
+            
+            return !isMe && !isEliminated;
+        });
 
     if (alivePlayers.length === 0) return toast("Personne à éliminer...");
 
-    let listHtml = `
-        <h3 style="margin-bottom:15px; text-align:center;">CIBLE À ÉLIMINER</h3>
-        <div style="max-height: 300px; overflow-y: auto;">
-    `;
+    let listHtml = `<h3 style="margin-bottom:15px; text-align:center;">CIBLE À ÉLIMINER</h3><div style="max-height: 300px; overflow-y: auto;">`;
 
     alivePlayers.forEach(([key, p]) => {
         listHtml += `
             <div class="player-item" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px;">
-                <span>${p.name}</span>
+                <span>${p.name} ${p.role === 'murder' ? '🔴' : ''}</span>
                 <button class="btn btn-danger" style="min-height:40px; padding:0 15px; font-size:0.8rem;" 
                     onclick="confirmElimination('${key}', '${p.name.replace(/'/g, "\\'")}')">
                     ÉLIMINER
                 </button>
-            </div>
-        `;
+            </div>`;
     });
 
     listHtml += `</div><button class="btn btn-secondary" style="width:100%; margin-top:15px;" onclick="closeModal()">ANNULER</button>`;
-    
     showModal(listHtml);
 };
+
 
 // 4. CONFIRMATION ET ACTION D'ÉLIMINATION
 window.confirmElimination = (targetKey, targetName) => {
@@ -937,36 +944,86 @@ window.confirmElimination = (targetKey, targetName) => {
 };
 
 async function executeKill(targetKey, targetName) {
-    const mode = state.settings.mode || 'classic';
-    const targetRole = state.players[targetKey].role;
-
-    // Logique Justicier
-    if (state.role === 'justice') {
-        if (targetRole === 'civil') {
-            // Le justicier meurt avec sa cible
-            await update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { eliminated: true, killedAt: Date.now(), deathReason: "Erreur judiciaire" });
-            await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { eliminated: true, killedAt: Date.now() });
-            toast("C'était un innocent... JUSTICE RATÉE !");
-        } else {
-            // Meurtre d'un murder
-            await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { eliminated: true, killedAt: Date.now() });
-            toast(`BIEN JOUÉ ! ${targetName} était un Murder.`);
-        }
-    } 
-    // Logique Infection
-    else if (state.role === 'murder' && mode === 'infection') {
-        await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { role: 'murder', hasKillBonus: true });
-        toast(`${targetName} a été infecté !`);
-    }
-    // Logique Classique
-    else {
-        await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { eliminated: true, killedAt: Date.now() });
-        toast(`${targetName} éliminé !`);
-    }
+    // On crée une demande de kill que la victime devra accepter
+    const killRequestRef = ref(db, `lobbies/${state.lobbyId}/killRequests/${targetKey}`);
     
-    if (navigator.vibrate) navigator.vibrate(500);
+    await set(killRequestRef, {
+        fromName: state.user,
+        fromKey: state.playerKey,
+        fromRole: state.role,
+        timestamp: Date.now()
+    });
+
+    toast(`Confirmation élimination envoyée à ${targetName}...`);
 }
 
+function listenForKillRequests() {
+    onValue(ref(db, `lobbies/${state.lobbyId}/killRequests`), (snap) => {
+        const requests = snap.val();
+        if (!requests) return;
+
+        // 1. Vibration pour TOUT LE MONDE quand un kill est initié ou validé
+        // (Pour marquer l'événement tragique dans la zone)
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+        // 2. Si JE SUIS la cible de l'une des requêtes
+        if (requests[state.playerKey]) {
+            const req = requests[state.playerKey];
+            handleBeingTargeted(req);
+        }
+    });
+}
+
+function handleBeingTargeted(request) {
+    // Si déjà mort, on ignore
+    if (state.players[state.playerKey].eliminated) return;
+
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+    showModal(`
+        <h2 style="color:var(--murder); text-align:center;">⚠️ TENTATIVE D'ASSASSINAT</h2>
+        <p style="text-align:center; margin: 20px 0;">
+            <b>${request.fromName}</b> prétend vous avoir éliminé. Confirmez-vous ?
+        </p>
+        <button class="btn btn-danger" style="width:100%" onclick="confirmMyDeath('${request.fromKey}', '${request.fromRole}')">OUI, JE SUIS MORT</button>
+        <button class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="refuseDeath()">NON, C'EST FAUX</button>
+    `, false);
+}
+
+window.confirmMyDeath = async (attackerKey, attackerRole) => {
+    const mode = state.settings.mode || 'classic';
+    let updates = {};
+
+    // Logique Infection
+    if (attackerRole === 'murder' && mode === 'infection') {
+        updates[`players/${state.playerKey}/role`] = 'murder';
+        updates[`players/${state.playerKey}/hasKillBonus`] = true;
+        toast("Tu as été infecté ! Tu es maintenant un MURDER.");
+    } 
+    // Logique Classique / Justicier
+    else {
+        updates[`players/${state.playerKey}/eliminated`] = true;
+        updates[`players/${state.playerKey}/killedAt`] = Date.now();
+        
+        // Si Justicier tue un Civil, le Justicier meurt aussi
+        if (attackerRole === 'justice' && state.role === 'civil') {
+            updates[`players/${attackerKey}/eliminated`] = true;
+            updates[`players/${attackerKey}/deathReason`] = "Erreur judiciaire";
+        }
+    }
+
+    // Nettoyage de la requête et mise à jour
+    await update(ref(db, `lobbies/${state.lobbyId}`), updates);
+    await remove(ref(db, `lobbies/${state.lobbyId}/killRequests/${state.playerKey}`));
+    closeModal();
+};
+
+window.refuseDeath = async () => {
+    await remove(ref(db, `lobbies/${state.lobbyId}/killRequests/${state.playerKey}`));
+    closeModal();
+    toast("Action contestée.");
+};
+    
 
     function becomeGhost() {
         state.isGhost = true;
