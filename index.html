@@ -262,8 +262,8 @@ input[type=range] {
         <div>
             <label style="font-size: 0.7rem; color: var(--primary);">KILL DIRECT</label>
             <select id="input-instant-kill" class="form-input" style="width: 100%;" onchange="validateAndSyncSettings()">
-                <option value="false">NON</option>
                 <option value="true">OUI</option>
+                <option value="false">NON (En dévellopement)</option>
             </select>
         </div>
     </div>
@@ -789,14 +789,23 @@ function syncGame(snap) {
     if (!data) return;
     
     const players = data.players || {};
-    state.players = players; // Important de mettre à jour l'état local
+    state.players = players;
     state.bonusZones = data.bonusZones || [];
 
+    // MISE À JOUR CRITIQUE DU RÔLE ET DES PRIVILÈGES
     if (players[state.playerKey]) {
-        state.bonuses.kill = players[state.playerKey].hasKillBonus || false;
+        const me = players[state.playerKey];
+        
+        // Si le rôle a changé dans la DB (ex: infection), on met à jour localement
+        if (state.role !== me.role) {
+            state.role = me.role;
+            document.getElementById('hud-role').innerText = state.role.toUpperCase();
+            document.getElementById('hud-role').style.color = state.role === 'murder' ? 'var(--murder)' : 'var(--civil)';
+        }
+        
+        state.bonuses.kill = me.hasKillBonus || false;
     }
 
-    // Appelle la mise à jour de la visibilité du bouton
     updateKillButtonVisibility();
 
     const currentEliminated = Object.values(players).filter(p => p.eliminated).length;
@@ -816,7 +825,6 @@ function syncGame(snap) {
     otherMarkers.forEach(m => gameMap.removeLayer(m));
     bonusMarkers.forEach(m => gameMap.removeLayer(m));
 
-    // Affichage des bonus pour le Murder
     if (state.role === 'murder' && !state.isGhost) {
         state.bonusZones.forEach(z => {
             if (!z.used) {
@@ -825,11 +833,11 @@ function syncGame(snap) {
             }
         });
         
-        document.getElementById('bonus-status').classList.remove('hidden');
-        document.getElementById('bonus-status').innerText = `KILL: ${state.bonuses.kill?'OUI':'NON'} | VOIR: ${state.bonuses.seeAll?'TOUS':(state.bonuses.seeMurders?'MURDERS':'NON')}`;
+        const bStatus = document.getElementById('bonus-status');
+        bStatus.classList.remove('hidden');
+        bStatus.innerText = `KILL: ${state.bonuses.kill?'OUI':'NON'} | VOIR: ${state.bonuses.seeAll?'TOUS':(state.bonuses.seeMurders?'MURDERS':'NON')}`;
     }
 
-    // Affichage des autres joueurs sur la carte
     Object.keys(players).forEach(k => {
         const p = players[k];
         if (k === state.playerKey || p.eliminated || !p.pos) return;
@@ -853,8 +861,6 @@ function syncGame(snap) {
 
     if (state.isHost && data.status === 'playing') checkWinConditions(players);
 }
-
-
 
     function checkBonusCollection() {
         state.bonusZones.forEach((z, i) => {
@@ -998,25 +1004,38 @@ window.confirmMyDeath = async (attackerKey, attackerRole) => {
     if (attackerRole === 'murder' && mode === 'infection') {
         updates[`players/${state.playerKey}/role`] = 'murder';
         updates[`players/${state.playerKey}/hasKillBonus`] = true;
+        
+        // Mise à jour locale immédiate pour forcer l'interface
+        state.role = 'murder'; 
+        state.bonuses.kill = true;
+        
         toast("Tu as été infecté ! Tu es maintenant un MURDER.");
+        
+        // On rafraîchit l'affichage du HUD manuellement
+        document.getElementById('hud-role').innerText = "MURDER";
+        document.getElementById('hud-role').style.color = 'var(--murder)';
     } 
     // Logique Classique / Justicier
     else {
         updates[`players/${state.playerKey}/eliminated`] = true;
         updates[`players/${state.playerKey}/killedAt`] = Date.now();
         
-        // Si Justicier tue un Civil, le Justicier meurt aussi
         if (attackerRole === 'justice' && state.role === 'civil') {
             updates[`players/${attackerKey}/eliminated`] = true;
             updates[`players/${attackerKey}/deathReason`] = "Erreur judiciaire";
+            updates[`players/${attackerKey}/killedAt`] = Date.now();
         }
     }
 
-    // Nettoyage de la requête et mise à jour
+    // Nettoyage de la requête et mise à jour Firebase
+    updates[`killRequests/${state.playerKey}`] = null;
     await update(ref(db, `lobbies/${state.lobbyId}`), updates);
-    await remove(ref(db, `lobbies/${state.lobbyId}/killRequests/${state.playerKey}`));
+    
     closeModal();
+    // On force la vérification du bouton Kill
+    updateKillButtonVisibility();
 };
+
 
 window.refuseDeath = async () => {
     await remove(ref(db, `lobbies/${state.lobbyId}/killRequests/${state.playerKey}`));
