@@ -289,18 +289,22 @@ input[type=range] {
 
 
     <div id="screen-game" class="screen hidden" style="padding:0;">
-        <div class="hud">
-            <div class="hud-card">
-                <div>⌛ <span id="timer">00:00</span></div>
-                <div id="hud-role" style="font-weight:bold;">CIVIL</div>
-                <div>👥 <span id="alive-count">0</span></div>
-            </div>
-            <div id="bonus-status" class="hidden" style="margin-top:5px; font-size:0.7rem; color:var(--primary); text-align:center; background:rgba(0,0,0,0.6); border-radius:5px;"></div>
+    <div class="hud">
+        <div class="hud-card">
+            <div>⌛ <span id="timer">00:00</span></div>
+            <div id="hud-role" style="font-weight:bold;">CIVIL</div>
+            <div>👥 <span id="alive-count">0</span></div>
+            <button id="btn-kill-list" class="hidden" onclick="openKillList()" 
+                style="background:var(--murder); border:none; color:white; padding:8px 12px; border-radius:8px; font-weight:bold; pointer-events:auto; margin-left:10px;">
+                KILL
+            </button>
         </div>
-        
-        <div id="gameMap"></div>
-        <button id="btn-eliminate" class="btn btn-danger eliminate-btn" onclick="doEliminate()">ÉLIMINER !</button>
+        <div id="bonus-status" class="hidden" ...></div>
     </div>
+    
+    <div id="gameMap"></div>
+    </div>
+
 
     <div id="screen-results" class="screen hidden">
         <h1 id="winner-text" style="text-align:center; margin-top:50px;">VICTOIRE</h1>
@@ -777,21 +781,22 @@ function updatePosition(p) {
     }
 }
 
-
     let lastEliminatedCount = 0;
 
 function syncGame(snap) {
     const data = snap.val();
     if (!data) return;
     
-    // Définir les variables d'abord
     const players = data.players || {};
+    state.players = players; // Important de mettre à jour l'état local
     state.bonusZones = data.bonusZones || [];
 
-    // Maintenant on peut synchroniser le bonus de kill local
     if (players[state.playerKey]) {
         state.bonuses.kill = players[state.playerKey].hasKillBonus || false;
     }
+
+    // Appelle la mise à jour de la visibilité du bouton
+    updateKillButtonVisibility();
 
     const currentEliminated = Object.values(players).filter(p => p.eliminated).length;
     if (currentEliminated > lastEliminatedCount) {
@@ -861,100 +866,106 @@ function syncGame(snap) {
         });
     }
 
-    function giveRandomBonus() {
+// 1. GESTION DES BONUS : Le murder garde son bonus une fois acquis
+function giveRandomBonus() {
     let updates = {};
-    if (!state.bonuses.kill) {
+    // Si c'est un murder, on lui donne le bonus de kill définitif
+    if (state.role === 'murder') {
         state.bonuses.kill = true;
         updates[`players/${state.playerKey}/hasKillBonus`] = true;
+        toast("💥 BONUS KILL ACQUIS (DÉFINITIF) !");
     } else if (!state.bonuses.seeMurders) {
         state.bonuses.seeMurders = true;
-        // On peut ajouter d'autres flags dans Firebase si besoin
+        toast("👁️ VOUS VOYEZ LES AUTRES MURDERS !");
     } else if (!state.bonuses.seeAll) {
         state.bonuses.seeAll = true;
+        toast("📡 RADAR GLOBAL ACTIVÉ !");
     }
     
-    // Envoi à Firebase
     update(ref(db, `lobbies/${state.lobbyId}`), updates);
-    toast("BONUS RÉCUPÉRÉ !");
 }
 
-
-function checkKillProximity() {
-    const isInstantKill = String(state.settings.instantKill) === "true";
-    const canKill = (state.role === 'murder' && (state.bonuses.kill || isInstantKill)) || (state.role === 'justice');
+// 2. VISIBILITÉ DU BOUTON KILL (à appeler dans syncGame)
+function updateKillButtonVisibility() {
+    const btn = document.getElementById('btn-kill-list');
+    const isInstant = String(state.settings.instantKill) === "true";
+    const canKill = (state.role === 'murder' && (state.bonuses.kill || isInstant)) || (state.role === 'justice');
     
-    // On cache le bouton si le joueur ne peut pas tuer ou est mort
-    if (!canKill || !state.pos || state.players[state.playerKey].eliminated) {
-        document.getElementById('btn-eliminate').style.display = 'none';
-        return;
+    // On affiche le bouton seulement si le joueur a le droit de tuer et n'est pas mort
+    if (canKill && !state.players[state.playerKey].eliminated) {
+        btn.classList.remove('hidden');
+    } else {
+        btn.classList.add('hidden');
     }
+}
 
-    state.nearbyPlayer = null;
-    let minDistance = 20; // Seuil de 20 mètres
+// 3. OUVERTURE DU MODAL DE SÉLECTION
+window.openKillList = () => {
+    const alivePlayers = Object.entries(state.players)
+        .filter(([key, p]) => !p.eliminated && key !== state.playerKey);
 
-    Object.keys(state.players).forEach(k => {
-        const p = state.players[k];
-        
-        // On ignore soi-même, les morts, et ceux qui n'ont pas de position
-        if (k === state.playerKey || p.eliminated || !p.pos) return;
-        
-        // Conversion explicite en tableaux [longitude, latitude] pour Turf
-        const from = [state.pos.lng, state.pos.lat];
-        const to = [p.pos.lng, p.pos.lat];
+    if (alivePlayers.length === 0) return toast("Personne à éliminer...");
 
-        const dist = turf.distance(from, to, {units: 'meters'});
+    let listHtml = `
+        <h3 style="margin-bottom:15px; text-align:center;">CIBLE À ÉLIMINER</h3>
+        <div style="max-height: 300px; overflow-y: auto;">
+    `;
 
-        if (dist <= minDistance) {
-            state.nearbyPlayer = {key: k, name: p.name, role: p.role};
-        }
+    alivePlayers.forEach(([key, p]) => {
+        listHtml += `
+            <div class="player-item" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px;">
+                <span>${p.name}</span>
+                <button class="btn btn-danger" style="min-height:40px; padding:0 15px; font-size:0.8rem;" 
+                    onclick="confirmElimination('${key}', '${p.name.replace(/'/g, "\\'")}')">
+                    ÉLIMINER
+                </button>
+            </div>
+        `;
     });
 
-    const btn = document.getElementById('btn-eliminate');
-    if (state.nearbyPlayer) {
-        btn.style.display = 'block';
-        btn.innerText = (state.role === 'justice') ? `RENDRE JUSTICE À ${state.nearbyPlayer.name}` : `ÉLIMINER ${state.nearbyPlayer.name}`;
-    } else {
-        btn.style.display = 'none';
-    }
-}
+    listHtml += `</div><button class="btn btn-secondary" style="width:100%; margin-top:15px;" onclick="closeModal()">ANNULER</button>`;
+    
+    showModal(listHtml);
+};
 
-    window.doEliminate = () => {
-    if (!state.nearbyPlayer) return;
-    const mode = state.settings.mode || 'classic';
-    const target = state.nearbyPlayer;
-
-    // --- LOGIQUE JUSTICIER ---
-    if (state.role === 'justice') {
-        if (target.role === 'civil') {
-            // Le justicier s'est trompé : il meurt aussi
-            update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { eliminated: true, killedAt: Date.now(), deathReason: "Erreur judiciaire" });
-            update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { eliminated: true, killedAt: Date.now() });
-            toast("Tu as tué un innocent ! Tu es éliminé.");
-        } else {
-            // Il a tué un murder
-            update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { eliminated: true, killedAt: Date.now() });
-            toast(`BRAVO ! ${target.name} était un Murder.`);
-        }
-    } 
-    // --- LOGIQUE INFECTION ---
-    else if (state.role === 'murder' && mode === 'infection') {
-        update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { 
-            role: 'murder', 
-            hasKillBonus: true // Le nouveau infecté peut tuer direct
-        });
-        toast(`Tu as infecté ${target.name} !`);
-    }
-    // --- LOGIQUE CLASSIQUE ---
-    else {
-        update(ref(db, `lobbies/${state.lobbyId}/players/${target.key}`), { eliminated: true, killedAt: Date.now() });
-        toast(`Tu as éliminé ${target.name} !`);
-    }
-
-    // Consomme le bonus de kill s'il n'est pas en "Instant Kill"
-    if (state.role === 'murder' && !state.settings.instantKill) {
-        state.bonuses.kill = false;
+// 4. CONFIRMATION ET ACTION D'ÉLIMINATION
+window.confirmElimination = (targetKey, targetName) => {
+    if (confirm(`Confirmer l'élimination de ${targetName} ?`)) {
+        executeKill(targetKey, targetName);
+        closeModal();
     }
 };
+
+async function executeKill(targetKey, targetName) {
+    const mode = state.settings.mode || 'classic';
+    const targetRole = state.players[targetKey].role;
+
+    // Logique Justicier
+    if (state.role === 'justice') {
+        if (targetRole === 'civil') {
+            // Le justicier meurt avec sa cible
+            await update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { eliminated: true, killedAt: Date.now(), deathReason: "Erreur judiciaire" });
+            await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { eliminated: true, killedAt: Date.now() });
+            toast("C'était un innocent... JUSTICE RATÉE !");
+        } else {
+            // Meurtre d'un murder
+            await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { eliminated: true, killedAt: Date.now() });
+            toast(`BIEN JOUÉ ! ${targetName} était un Murder.`);
+        }
+    } 
+    // Logique Infection
+    else if (state.role === 'murder' && mode === 'infection') {
+        await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { role: 'murder', hasKillBonus: true });
+        toast(`${targetName} a été infecté !`);
+    }
+    // Logique Classique
+    else {
+        await update(ref(db, `lobbies/${state.lobbyId}/players/${targetKey}`), { eliminated: true, killedAt: Date.now() });
+        toast(`${targetName} éliminé !`);
+    }
+    
+    if (navigator.vibrate) navigator.vibrate(500);
+}
 
 
     function becomeGhost() {
