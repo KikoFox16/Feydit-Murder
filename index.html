@@ -6,235 +6,242 @@
     <title>Murder Real-Life</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root {
-    --primary: #bb86fc;
-    --primary-dark: #9a67ea;
-    --background: #121212;
-    --surface: #1e1e1e;
-    --error: #cf6679;
-    --on-primary: #000000;
-    --on-surface: #ffffff;
-    --on-background: #e0e0e0;
-    --murder: #ff4444;
-    --civil: #00c853;
-    --safe-bottom: env(safe-area-inset-bottom); /* Pour les iPhones récents */
+:root {
+    --primary: #9d50bb; 
+    --primary-light: #6e48aa;
+    --background: #0a0a0c;
+    --surface: #16161e;
+    --surface-accent: #23232e;
+    --error: #ff4b5c; 
+    --success: #00e676; 
+    --on-primary: #ffffff;
+    --on-surface: #e0e0e0;
+    --murder: #ff3333;
+    --civil: #ffffff;
+    --justice: #00d4ff;
+    /* Gestion des zones sécurisées (encoches/barres de navigation iPhone) */
+    --safe-top: env(safe-area-inset-top, 20px);
+    --safe-bottom: env(safe-area-inset-bottom, 20px);
 }
 
 * { 
     margin: 0; 
     padding: 0; 
     box-sizing: border-box; 
-    font-family: 'Inter', 'Segoe UI', Roboto, sans-serif; 
-    -webkit-tap-highlight-color: transparent; /* Supprime le flash bleu au clic sur mobile */
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    /* Désactive le rectangle gris au clic sur mobile */
+    -webkit-tap-highlight-color: transparent; 
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    /* Empêche le rebond (scroll élastique) sur iOS */
+    overflow: hidden;
+    position: fixed;
 }
 
 body { 
     background-color: var(--background); 
-    color: var(--on-background); 
-    height: 100vh; 
-    height: -webkit-fill-available; /* Correction bug hauteur iOS */
-    overflow: hidden; 
-    position: fixed; /* Empêche le rebond du scroll */
-    width: 100%;
+    color: var(--on-surface); 
+}
+
+/* --- Fond Animé Subtil --- */
+body::before {
+    content: "";
+    position: absolute;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    background: radial-gradient(circle, #1a1a2e 0%, #0a0a0c 70%);
+    z-index: -1;
 }
 
 #app { 
-    height: 100%; 
+    height: 100dvh; /* Utilise le dynamic viewport height pour mobile */
     width: 100%; 
     position: relative; 
 }
 
-/* --- Écrans --- */
 .screen { 
     position: absolute; 
     inset: 0;
     z-index: 10; 
-    background: var(--background); 
+    background: transparent; 
     display: flex; 
     flex-direction: column; 
-    padding: 24px 16px;
-    padding-bottom: calc(24px + var(--safe-bottom));
+    /* Padding dynamique pour ne pas être caché par l'encoche ou la barre home */
+    padding: var(--safe-top) 20px var(--safe-bottom) 20px;
 }
 
 .hidden { display: none !important; }
 
-/* --- Cartes --- */
+/* --- Cartes & Map --- */
 #setupMap, #gameMap { 
     width: 100%; 
     flex-grow: 1; 
-    border-radius: 20px; 
-    margin: 12px 0; 
+    border-radius: 24px; 
+    margin: 15px 0; 
     z-index: 1;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-/* --- Boutons Mobiles --- */
+/* --- Boutons Stylisés --- */
 .btn { 
-    background: var(--primary); 
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); 
     color: var(--on-primary); 
     border: none; 
-    min-height: 56px; /* Taille standard pour les pouces */
-    border-radius: 12px; 
+    min-height: 60px; /* Légèrement plus grand pour le pouce */
+    border-radius: 18px; 
     font-size: 1rem;
-    font-weight: 800; 
+    font-weight: 700; 
     cursor: pointer; 
+    letter-spacing: 1px;
     text-transform: uppercase; 
-    margin: 8px 0;
+    margin: 10px 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.1s active;
+    box-shadow: 0 4px 15px rgba(157, 80, 187, 0.3);
+    transition: all 0.2s ease;
 }
 
-.btn:active {
-    transform: scale(0.97); /* Feedback tactile */
-    filter: brightness(0.9);
+/* Effet au clic mobile */
+.btn:active { 
+    transform: scale(0.95); 
+    filter: brightness(1.2); 
 }
 
 .btn-secondary { 
-    background: var(--surface); 
-    color: var(--primary); 
-    border: 2px solid var(--primary); 
+    background: var(--surface-accent); 
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: none;
 }
 
-.btn-danger { background: var(--error); color: white; }
+.btn-danger { 
+    background: linear-gradient(135deg, #ff4b2b 0%, #ff416c 100%); 
+    box-shadow: 0 4px 15px rgba(255, 75, 43, 0.3);
+}
 
+/* --- Formulaires --- */
 .form-input { 
     background: var(--surface); 
-    border: 2px solid #333; 
-    padding: 16px; 
-    border-radius: 12px; 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    padding: 18px; 
+    border-radius: 16px; 
     color: white; 
     margin-bottom: 16px; 
-    font-size: 16px; /* Empêche le zoom auto de l'iPhone au focus */
+    font-size: 16px; /* Important : 16px minimum pour éviter le zoom auto sur iPhone */
+    width: 100%;
 }
 
-/* --- HUD (Interface de jeu) --- */
+.form-input:focus { border-color: var(--primary); outline: none; }
+
+/* --- HUD - Optimisé pour Mobile --- */
 .hud { 
     position: absolute; 
-    top: 0; 
-    left: 0; 
-    right: 0; 
-    padding: 12px;
+    top: var(--safe-top); 
+    left: 10px; 
+    right: 10px; 
     z-index: 100; 
-    pointer-events: none; 
 }
 
 .hud-card { 
-    background: rgba(30, 30, 30, 0.9); 
-    backdrop-filter: blur(10px);
+    background: rgba(22, 22, 30, 0.85); 
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
     padding: 15px; 
-    border-radius: 16px; 
+    border-radius: 20px; 
     display: flex; 
-    justify-content: space-between; 
+    justify-content: space-around; 
     align-items: center; 
-    border: 1px solid rgba(187, 134, 252, 0.3);
-    pointer-events: auto;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #hud-role {
-    font-size: 1.2rem;
+    font-weight: 900;
+    font-size: 1rem;
     letter-spacing: 2px;
 }
 
-/* --- Liste Joueurs Lobby --- */
+/* --- Liste Joueurs Scrollable --- */
 #players-list { 
-    margin: 16px 0; 
-    flex-grow: 1; 
+    margin: 15px 0; 
+    padding: 5px;
     overflow-y: auto;
-    background: rgba(255,255,255,0.03);
-    border-radius: 12px;
-    padding: 8px;
+    flex-grow: 1; /* Prend l'espace restant */
 }
 
 .player-item { 
-    background: var(--surface); 
-    padding: 14px; 
-    margin-bottom: 8px; 
-    border-radius: 10px; 
+    background: linear-gradient(90deg, var(--surface) 0%, var(--surface-accent) 100%); 
+    padding: 18px; 
+    margin-bottom: 12px; 
+    border-radius: 18px; 
     display: flex; 
     justify-content: space-between;
     align-items: center;
+    border-left: 5px solid var(--primary);
+    animation: fadeIn 0.4s ease-out;
 }
 
-/* --- Modals --- */
+/* --- Modals Plein Écran (Mobile Style) --- */
 .modal-overlay { 
-    position: fixed; 
-    inset: 0; 
     background: rgba(0,0,0,0.85); 
-    z-index: 1500; 
-    display: flex; 
-    align-items: flex-end; /* Apparait en bas pour le pouce */
-    justify-content: center; 
+    backdrop-filter: blur(8px);
+    z-index: 1000;
 }
 
 .modal { 
     background: var(--surface); 
-    width: 100%; 
-    max-width: 500px; 
-    padding: 30px 20px; 
-    border-radius: 24px 24px 0 0; /* Arrondi seulement en haut */
-    animation: slideUp 0.3s ease-out;
+    border-top: 3px solid var(--primary);
+    padding: 30px 20px calc(20px + var(--safe-bottom)) 20px; 
+    border-radius: 30px 30px 0 0; 
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
 }
 
-/* --- Toasts --- */
-#toastContainer { 
-    position: fixed; 
-    top: 80px; /* En haut pour ne pas gêner les boutons du bas */
-    left: 50%; 
-    transform: translateX(-50%); 
-    z-index: 2000; 
-    width: 90%; 
+/* --- Toasts (Plus hauts pour mobile) --- */
+#toastContainer {
+    position: fixed;
+    top: calc(var(--safe-top) + 80px);
+    left: 20px;
+    right: 20px;
+    z-index: 9999;
+    pointer-events: none;
 }
 
 .toast { 
-    background: var(--primary); 
-    color: black;
+    background: var(--surface-accent);
+    color: white;
+    border-left: 4px solid var(--primary);
     padding: 16px; 
-    border-radius: 12px; 
-    margin-bottom: 10px; 
+    border-radius: 14px; 
+    font-weight: 600;
+    margin-bottom: 10px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* --- Animations --- */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+#timer {
+    font-family: 'Courier New', Courier, monospace;
     font-weight: bold;
-    text-align: center;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    color: var(--primary);
+    background: rgba(255,255,255,0.1);
+    padding: 4px 10px;
+    border-radius: 8px;
 }
 
-/* --- Écran de Mort / Ghost --- */
+/* Ghost Mode View */
 .ghost-mode { 
-    filter: grayscale(100%) contrast(1.2); 
+    filter: grayscale(1) brightness(0.6) contrast(1.2); 
 }
 
-.eliminate-btn { 
-    position: fixed; 
-    bottom: 40px; 
-    left: 16px;
-    right: 16px;
-    z-index: 100; 
-    background: var(--murder); 
-    padding: 20px; 
-    border-radius: 16px; 
-    font-size: 1.4rem; 
-    font-weight: 900;
-    box-shadow: 0 0 20px rgba(255, 68, 68, 0.4);
-    display: none; 
-}
+</style>
 
-/* Animations */
-@keyframes slideUp { 
-    from { transform: translateY(100%); } 
-    to { transform: translateY(0); } 
-}
-
-/* Range Input Mobile */
-input[type=range] {
-    width: 100%;
-    margin: 15px 0;
-    height: 8px;
-    background: #333;
-    border-radius: 5px;
-    accent-color: var(--primary);
-}
-    </style>
 </head>
 <body>
 
@@ -511,7 +518,6 @@ async function joinLobby(id, host = false) {
     const lobbyRef = ref(db, `lobbies/${id}`);
     
     if (host) {
-        // Génération de 5 zones bonus aléatoires autour du premier point de la zone (si définie)
         const bonusZones = [];
         if (state.settings.zone && state.settings.zone.length > 0) {
             for(let i=0; i<5; i++) {
@@ -534,9 +540,20 @@ async function joinLobby(id, host = false) {
     const pRef = push(ref(db, `lobbies/${id}/players`));
     state.playerKey = pRef.key;
 
-    const data = { name: state.user, ready: false, host, role: 'civil', eliminated: false };
+    // Initialisation avec le statut 'online'
+    const data = { 
+        name: state.user, 
+        ready: false, 
+        host, 
+        role: 'civil', 
+        eliminated: false,
+        online: true 
+    };
+    
     await set(pRef, data);
-    onDisconnect(pRef).remove();
+
+    // GESTION DE LA DÉCONNEXION : On ne supprime plus, on change juste le statut
+    onDisconnect(pRef).update({ online: false });
 
     document.getElementById('screen-menu').classList.add('hidden');
     document.getElementById('screen-lobby').classList.remove('hidden');
@@ -546,8 +563,6 @@ async function joinLobby(id, host = false) {
     closeModal();
     listenLobby();
 }
-
-
 
 function listenLobby() {
     onValue(ref(db, `lobbies/${state.lobbyId}`), (snap) => {
@@ -559,22 +574,20 @@ function listenLobby() {
         state.settings = { ...state.settings, ...data.settings };
         
         const playerEntries = Object.entries(state.players);
-        const playerCount = playerEntries.length;
         
-        const allReady = playerCount >= 2 && playerEntries.every(([_, p]) => p.ready);
+        // On ne compte pour le "prêt" que les joueurs en ligne
+        const playersOnline = playerEntries.filter(([_, p]) => p.online !== false);
+        const allReady = playersOnline.length >= 2 && playersOnline.every(([_, p]) => p.ready);
 
         const list = document.getElementById('players-list');
         list.innerHTML = playerEntries.map(([_, p]) => `
-            <div class="player-item">
-                <span>${p.name} ${p.host ? '👑' : ''}</span>
+            <div class="player-item" style="opacity: ${p.online === false ? '0.5' : '1'}">
+                <span>${p.name} ${p.host ? '👑' : ''} ${p.online === false ? '(Déconnecté)' : ''}</span>
                 <span style="color:${p.ready ? 'var(--civil)' : 'var(--error)'}">${p.ready ? 'PRÊT' : 'ATTENTE'}</span>
             </div>
         `).join('');
 
-        console.log("Status:", currentStatus, "AllReady:", allReady, "Host:", state.isHost);
-
         if (state.isHost && currentStatus === 'lobby' && allReady) {
-            console.log("Lancement de la partie...");
             assignRoles(); 
         }
 
@@ -591,12 +604,9 @@ function listenLobby() {
             const isReady = state.players[state.playerKey].ready;
             btn.innerText = isReady ? "ANNULER PRÊT" : "JE SUIS PRÊT";
             btn.style.background = isReady ? "var(--surface)" : "var(--primary)";
-            btn.style.color = isReady ? "var(--primary)" : "var(--on-primary)";
-            btn.style.border = isReady ? "2px solid var(--primary)" : "none";
         }
     });
 }
-
   
 let gameTimerInterval;
 
@@ -755,6 +765,11 @@ function enterGame() {
 
 
 function updatePosition(p) {
+    // Force le statut online si on arrive à envoyer sa position
+    if (state.players[state.playerKey] && state.players[state.playerKey].online === false) {
+        update(ref(db, `lobbies/${state.lobbyId}/players/${state.playerKey}`), { online: true });
+    }
+
     const userLatLng = [p.coords.latitude, p.coords.longitude];
     state.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
     
@@ -892,19 +907,23 @@ function giveRandomBonus() {
     update(ref(db, `lobbies/${state.lobbyId}`), updates);
 }
 
-// 2. VISIBILITÉ DU BOUTON KILL (à appeler dans syncGame)
 function updateKillButtonVisibility() {
     const btn = document.getElementById('btn-kill-list');
+    if (!btn) return;
+
+    // On s'assure que la comparaison est insensible au type (string ou boolean)
     const isInstant = String(state.settings.instantKill) === "true";
-    const canKill = (state.role === 'murder' && (state.bonuses.kill || isInstant)) || (state.role === 'justice');
+    const me = state.players[state.playerKey];
     
-    // On affiche le bouton seulement si le joueur a le droit de tuer et n'est pas mort
-    if (canKill && !state.players[state.playerKey].eliminated) {
+    const canKill = (state.role === 'murder' && (me.hasKillBonus || isInstant)) || (state.role === 'justice');
+    
+    if (canKill && !me.eliminated) {
         btn.classList.remove('hidden');
     } else {
         btn.classList.add('hidden');
     }
 }
+
 
 window.openKillList = () => {
     const mode = state.settings.mode || 'classic';
@@ -1051,14 +1070,23 @@ window.refuseDeath = async () => {
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     }
 
-    function checkWinConditions(players) {
-        const pArr = Object.values(players);
-        const civilians = pArr.filter(p => p.role === 'civil' && !p.eliminated);
-        const murders = pArr.filter(p => p.role === 'murder' && !p.eliminated);
+function checkWinConditions(players) {
+    const pArr = Object.values(players);
+    
+    // On compte comme "en jeu" ceux qui ne sont pas éliminÉS, 
+    // qu'ils soient connectés ou non.
+    const aliveCivilians = pArr.filter(p => p.role === 'civil' && !p.eliminated);
+    const aliveMurders = pArr.filter(p => p.role === 'murder' && !p.eliminated);
 
-        if (civilians.length === 0) endGame('murder');
-        else if (murders.length === 0) endGame('civil');
+    // La partie ne s'arrête que si TOUS les civils sont éliminés 
+    // ou TOUS les murders sont éliminés (par kill ou zone).
+    if (aliveCivilians.length === 0) {
+        endGame('murder');
+    } else if (aliveMurders.length === 0) {
+        endGame('civil');
     }
+}
+
 
     function checkTimers() {
         // Logique de temps simplifié
